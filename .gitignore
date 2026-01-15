@@ -1,3 +1,4 @@
 # Repo-specific GitIgnore ----------------------------------------------------------------------------------------------
 train/
-test_gallery/
+gallery_probeKnown/
+probe_unknown/

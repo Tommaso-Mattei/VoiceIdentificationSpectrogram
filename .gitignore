@@ -1,4 +1,13 @@
 # Repo-specific GitIgnore ----------------------------------------------------------------------------------------------
 train/
+train_npy/
+train_npy_small
 gallery_probeKnown/
+gallery_probeKnown_validation/
+gallery_probeKnown_npy/
+gallery_probeKnown_npy_validation/
 probe_unknown/
+probe_unknown_npy/
+probe_unknown_npy_validation/
+probe_unknown_validation/
+train_weights/

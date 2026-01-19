@@ -200,6 +200,7 @@ def analyze_over_thresholds(probeDataset,gallery,embeddingModel,max,thresholds):
     }
 
     for t in thresholds:
+        print(t)
         TP, TN, FP, FN, ACC, DIR, FPIR, FNIR = analyze(probeDataset,gallery,t,embeddingModel,max)
         results["threshold"].append(t)
         results["TP"].append(TP)
@@ -243,16 +244,43 @@ def plotMetrics(results):
     plt.show()
 
 
+def plotROCRatio(results):
+    """
+    Plots ROC using DIR (Y-axis) vs FPIR (X-axis) as a ratio.
+    Expects results dict with keys: 'TP', 'TN', 'FP', 'FN'.
+    """
+    DIR = []
+    FPIR = []
+
+    for TP, TN, FP, FN in zip(results["TP"], results["TN"], results["FP"], results["FN"]):
+        # DIR = TP / (TP + FN)
+        dir_val = TP / (TP + FN) if (TP + FN) > 0 else 0
+        # FPIR = FP / (FP + TN)
+        fpir_val = FP / (FP + TN) if (FP + TN) > 0 else 1e-6  # avoid division by zero
+
+        DIR.append(dir_val)
+        FPIR.append(fpir_val)
+
+    plt.figure(figsize=(8, 6))
+    plt.plot(FPIR, DIR, marker='o', linestyle='-', color='b', label="ROC (DIR vs FPIR)")
+    plt.xlabel("FPIR (False Positive Identification Rate)")
+    plt.ylabel("DIR (Detection and Identification Rate)")
+    plt.title("Open Set Identification (DIR vs FPIR)")
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+
+
 if __name__=="__main__":
 
     TRAIN_SAVE_WEIGHTS = "C:\\Users\\Mattia\\Documents\\biometric\\train_weights\\best.pt"
-    PROCESSED_GALLERY_PATH = "C:\\Users\\Mattia\\Documents\\biometric\\gallery_probeKnown_npy\\gallery_probeKnown_npy\\npy"
-    PROCESSED_PROBE_PATH = "C:\\Users\\Mattia\\Documents\\biometric\\probe_unknown_npy\\probe_unknown_npy\\npy"
+    PROCESSED_GALLERY_PATH = "C:\\Users\\Mattia\\Documents\\biometric\\gallery_probeKnown_npy_validation\\gallery_probeKnown_npy_validation\\npy"
+    PROCESSED_PROBE_PATH = "C:\\Users\\Mattia\\Documents\\biometric\\gallery_probeKnown_npy_validation\\gallery_probeKnown_npy_validation\\npy"
 
     embeddingModel=getModel()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    splitData = split("./gallery_probeKnown_npy/gallery_probeKnown_npy/npy")
+    splitData = split("./gallery_probeKnown_npy_validation/gallery_probeKnown_npy_validation/npy")
 
     galleryDataset = GalleryDataset(PROCESSED_GALLERY_PATH,splitData)
 
@@ -269,7 +297,8 @@ if __name__=="__main__":
             if k>max: max=k
     print(max)
     probeDataset = ProbeDataset(PROCESSED_PROBE_PATH,PROCESSED_GALLERY_PATH,splitData)
-    thresholds=[0.3,0.325,0.35,0.375,0.4,0.425,0.45,0.475,0.5,0.525,0.55,0.575,0.6]
+    thresholds = np.arange(0, 1.0001, 0.025)
     res = analyze_over_thresholds(probeDataset,gallery,embeddingModel,max,thresholds)
     plot_results(res)
     plotMetrics(res)
+    plotROCRatio(res)

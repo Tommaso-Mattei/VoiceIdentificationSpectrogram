@@ -183,6 +183,103 @@ def train_model(model,trainLoader,epochs,optimizer,scheduler,loss,device,weights
     print("It's finally over...")
 
 
+
+class ProbeDataset(Dataset):
+
+  def __init__(self, probe_dataset_path, gallery_dataset_path, picking_dict): #path of the probe and gallery and the dict which decides which folders to take from
+    super().__init__()
+
+    self.probe_dataset_path = Path(probe_dataset_path)
+    self.gallery_dataset_path = Path(gallery_dataset_path)
+
+    soundList = [] #list of tuples with path to the .wav and the corresponding label
+
+    for id_person in self.gallery_dataset_path.iterdir():
+      label = id_person.name
+      for video in id_person.iterdir():
+        if video.name in picking_dict[label][1]:
+          for voice_chunk in video.iterdir():
+            if voice_chunk.is_file():
+              soundList.append((voice_chunk,label))
+
+    for id_person in self.probe_dataset_path.iterdir():
+      label = id_person.name
+      for video in id_person.iterdir():
+        for voice_chunk in video.iterdir():
+          if voice_chunk.is_file():
+            soundList.append((voice_chunk,label))
+
+    self.soundList = soundList
+
+    ids = sorted({labels for _,labels in soundList})
+
+    self.num_classes = len(ids)
+
+    self.idMap = {id_str:idx for idx, id_str in enumerate(ids)}
+
+    self.samplerate = 0
+
+  def __len__(self):
+    return len(self.soundList)
+
+  def __getitem__(self, idx):
+      npyFilePath = self.soundList[idx][0]   # path to .wav
+
+      final_image = np.load(npyFilePath, mmap_mode="r")
+
+      x = torch.from_numpy(final_image).permute(2, 0, 1) #the way pytorch uses dimensions
+
+      stringLabel = self.soundList[idx][1]  # label associated to .wav
+
+      y = self.idMap[stringLabel]  # label associated to .wav
+
+      return [x, y]
+  
+
+
+class GalleryDataset(Dataset):
+
+  def __init__(self, gallery_dataset_path,picking_dict): #path of the gallery and the dict which decides which folders to take from
+    super().__init__()
+
+    self.voice_dataset_path = Path(gallery_dataset_path)
+
+    soundList = [] #list of tuples with path to the .wav and the corresponding label
+
+    for id_person in self.voice_dataset_path.iterdir():
+      label = id_person.name
+      for video in id_person.iterdir():
+        if video.name in picking_dict[label][0]:
+          for voice_chunk in video.iterdir():
+            if voice_chunk.is_file():
+              soundList.append((voice_chunk,label))
+
+    self.soundList = soundList
+
+    ids = sorted({labels for _,labels in soundList})
+
+    self.num_classes = len(ids)
+
+    self.idMap = {id_str:idx for idx, id_str in enumerate(ids)}
+
+    self.samplerate = 0
+
+  def __len__(self):
+    return len(self.soundList)
+
+  def __getitem__(self, idx):
+      npyFilePath = self.soundList[idx][0]   # path to .wav
+
+      final_image = np.load(npyFilePath, mmap_mode="r")
+
+      x = torch.from_numpy(final_image).permute(2, 0, 1) #the way pytorch uses dimensions
+
+      stringLabel = self.soundList[idx][1]  # label associated to .wav
+
+      y = self.idMap[stringLabel]  # label associated to .wav
+
+      return [x, y]
+
 class EmbeddingModel(nn.Module):
 
   def __init__(self, embedding_size):
@@ -202,47 +299,73 @@ class EmbeddingModel(nn.Module):
     normalized_embeddings = torch.nn.functional.normalize(embeddings)
 
     return normalized_embeddings
+  
+
+def preprocessing_dataset(voice_dataset_path,processed_dataset_path,mean,std):
+  voice_dataset_path = Path(voice_dataset_path)
+  processed_dataset_path = Path(processed_dataset_path)
+
+  for id_person in voice_dataset_path.iterdir():
+    target_id_folder = processed_dataset_path / id_person.name #it's a join
+    target_id_folder.mkdir(parents=True, exist_ok=True)
+    for video in id_person.iterdir():
+      target_video_folder = target_id_folder / video.name
+      target_video_folder.mkdir(parents=True, exist_ok=True)
+      for wav_file in video.iterdir():
+        if wav_file.is_file():
+          decibel_img, samplerate = transform_wav_to_spectrogram(wav_file)
+          final_image = transform_decibel_to_final(decibel_img,mean,std)
+          npy_path = target_video_folder / (wav_file.stem + ".npy") #.stem = only file name without extension
+          np.save(npy_path, final_image.astype(np.float32))
+  print("Finished")
 
 if __name__=="__main__":
-    MEAN, STD =-50.573315, 17.590815
-    TRAIN_SAVE_WEIGHTS = "C:\\Users\\Mattia\\Documents\\biometric\\train_weights\\best.pt"
-    PROCESSED_DATASET_PATH = "C:\\Users\\Mattia\\Documents\\biometric\\train_npy\\train_npy\\npy"
-    BATCH_SIZE = 32
-    EMBEDDING_SIZE = 256
-    EPOCHS = 10
-    LR = 0.001
+    if True:
+      MEAN, STD =-50.573315, 17.590815
+      TRAIN_SAVE_WEIGHTS = "C:\\Users\\Mattia\\Documents\\biometric\\train_weights\\best.pt"
+      PROCESSED_DATASET_PATH = "C:\\Users\\Mattia\\Documents\\biometric\\train_npy\\train_npy\\npy"
+      BATCH_SIZE = 32
+      EMBEDDING_SIZE = 256
+      EPOCHS = 50
+      LR = 0.001
 
-    trainDataset = VoiceDataset(PROCESSED_DATASET_PATH,MEAN,STD)
-    trainLoader = DataLoader(trainDataset, batch_size=BATCH_SIZE, shuffle=True, pin_memory=True)
-    num_classes = trainDataset.num_classes  
-    embeddingModel = EmbeddingModel(EMBEDDING_SIZE)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    embeddingModel.to(device)
+      trainDataset = VoiceDataset(PROCESSED_DATASET_PATH,MEAN,STD)
+      trainLoader = DataLoader(trainDataset, batch_size=BATCH_SIZE, shuffle=True, pin_memory=True)
+      num_classes = trainDataset.num_classes  
+      embeddingModel = EmbeddingModel(EMBEDDING_SIZE)
+      device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+      embeddingModel.to(device)
 
-    loss = CosFaceLoss(EMBEDDING_SIZE,num_classes).to(device)
+      loss = CosFaceLoss(EMBEDDING_SIZE,num_classes).to(device)
 
-    optimizer = torch.optim.Adam(list(embeddingModel.parameters())+list(loss.parameters()), lr=LR)
+      optimizer = torch.optim.Adam(list(embeddingModel.parameters())+list(loss.parameters()), lr=LR)
 
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
+      scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
 
-    #Train ResNet
+      #Train ResNet
 
-    print("train starting")
-    train_model(embeddingModel,trainLoader, EPOCHS, optimizer, scheduler,loss,device,TRAIN_SAVE_WEIGHTS)
+      print("train starting")
+      train_model(embeddingModel,trainLoader, EPOCHS, optimizer, scheduler,loss,device,TRAIN_SAVE_WEIGHTS)
 
-    embeddingModel = EmbeddingModel(EMBEDDING_SIZE)
-    embeddingModel.to(device)
+      embeddingModel = EmbeddingModel(EMBEDDING_SIZE)
+      embeddingModel.to(device)
 
-    #loss = CosFaceLoss(EMBEDDING_SIZE,num_classes).to(device)
+      #loss = CosFaceLoss(EMBEDDING_SIZE,num_classes).to(device)
 
-    weights = torch.load(TRAIN_SAVE_WEIGHTS,map_location=device)
+      weights = torch.load(TRAIN_SAVE_WEIGHTS,map_location=device)
 
-    embeddingModel.load_state_dict(weights["model_state_dict"])
+      embeddingModel.load_state_dict(weights["model_state_dict"])
 
-    #loss.load_state_dict(weights["loss_state_dict"])
-    input, y = trainDataset[0]
-    input = input.unsqueeze(0) #Creates an added dimension of B = 1 (a batch with one element) so that the format is uniform
-    input = input.to(device)
+      #loss.load_state_dict(weights["loss_state_dict"])
+      input, y = trainDataset[0]
+      input = input.unsqueeze(0) #Creates an added dimension of B = 1 (a batch with one element) so that the format is uniform
+      input = input.to(device)
 
-    embedding = inference(embeddingModel,input)
-    print(embedding.shape)
+      embedding = inference(embeddingModel,input)
+      print(embedding.shape)
+    else:
+      processed_dataset_path = "C:\\Users\\Mattia\\Documents\\biometric\\probe_npy\\npy"
+      probe_dataset = "C:\\Users\\Mattia\\Documents\\biometric\\probe_unknown-20260118T205820Z-1-001\\probe_unknown"
+
+      preprocessing_dataset(probe_dataset,processed_dataset_path,-50.573315, 17.590815)
+

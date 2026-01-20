@@ -1,5 +1,5 @@
 # CNN Based Mel-Spectrogram Analysis and Speaker Recognition
-A project for Biometric Systems in the second year (2025/2026), first semester, of the master's degree in Computer Science at La Sapienza university of Rome.
+A project for Biometric Systems in the 2025/2026 academic year, first semester, for the master's degree in Computer Science at La Sapienza university of Rome.
 The goal of the project is to implement a biometric system capable of executing an identification task in an open set scenario, through the use of mel-spectrograms and a CNN using the CosFace loss.
 
 # Structure

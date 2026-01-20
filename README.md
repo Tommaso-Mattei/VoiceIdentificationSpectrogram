@@ -9,3 +9,5 @@ The goal of the project is to implement a biometric system capable of executing 
 - In model.py the entire method is executed, from creating datasets to creating and training the model
 - In test.py all tests and metrics are created and executed
 - gallery.json is an example of how the gallery looks like in json format
+- Final-report.pdf is the complete report for the project
+- Presentation.pptx is the powerpoint presentation of the project
